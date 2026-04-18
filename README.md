@@ -167,10 +167,4 @@ If something breaks during the demo, drop to the next level:
 
 ---
 
-## Team
 
-| Role | Owner |
-|------|-------|
-| PLC Simulation (CodeSys) | Teammate A |
-| ESP32 Firmware (Modbus + WebSocket) | Teammate B |
-| AI + Frontend (bridge.py + index.html) | Neeil |
