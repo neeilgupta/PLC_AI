@@ -290,13 +290,12 @@ class MockTagSource:
     def list_scenarios(self) -> list[dict[str, str]]:
         return [
             {"name": "idle", "label": "Idle / healthy"},
-            {"name": "normal_run", "label": "Normal conveyor run"},
-            {"name": "motor_start_blocked", "label": "Motor start blocked"},
-            {"name": "conveyor_jam", "label": "Conveyor jam fault"},
-            {"name": "fault_reset_demo", "label": "Fault + reset recovery"},
-            {"name": "sequence_timeout", "label": "Sequence timeout"},
-            {"name": "tank_fill_verify", "label": "Tank fill verification"},
-            {"name": "hvac_fault", "label": "HVAC / pump fault"},
+            {"name": "traffic_phase_conflict", "label": "Traffic Signal Conflict"},
+            {"name": "pump_station_failure", "label": "Water Pump Station Failure"},
+            {"name": "elevator_door_fault", "label": "Elevator Door Fault"},
+            {"name": "tunnel_ventilation_fault", "label": "Tunnel Ventilation Fault"},
+            {"name": "garage_door_fault", "label": "Garage Door Safety Lockout"},
+            {"name": "conveyor_jam", "label": "Factory Conveyor Jam"},
         ]
 
     def set_scenario(self, scenario: str) -> None:
