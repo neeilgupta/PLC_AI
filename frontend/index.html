@@ -592,5 +592,161 @@
 
 </div><!-- /.app -->
 
+<script>
+  // ── Constants ────────────────────────────────────────────────────────────
+  const API = 'http://localhost:8000';
+
+  const TAG_NAMES = [
+    'Conveyor_Running','Sensor_Blocked','Motor_Current','Safety_OK',
+    'Start_Command','Stop_Command','Reset_Command','Tank_Level_Low',
+    'Tank_Level_High','Sequence_Timeout','System_Fault_Latch',
+    'Pump_Running','HVAC_Fault','Mode_Code','Fault_Code'
+  ];
+
+  const BOOL_TAGS = new Set([
+    'Conveyor_Running','Sensor_Blocked','Safety_OK','Start_Command',
+    'Stop_Command','Reset_Command','Tank_Level_Low','Tank_Level_High',
+    'Sequence_Timeout','System_Fault_Latch','Pump_Running','HVAC_Fault'
+  ]);
+
+  const CACHED_RESPONSES = {
+    101: {
+      label: "FAULT_E01 :: MOTOR_START_BLOCKED",
+      phase: "engineering",
+      summary: "Safety interlock is preventing motor start.",
+      cause: "Safety_OK is FALSE. The safety rung requires E-Stop NC contact, Guard_Door_Closed, and Pressure_OK to all be TRUE before Motor_Run energizes.",
+      steps: "1. Check E-Stop is pulled out and reset\n2. Verify guard door sensor reads TRUE\n3. Check Pressure_OK tag\n4. Force-scan the safety rung in online mode"
+    },
+    201: {
+      label: "FAULT_O04 :: CONVEYOR_JAM_DETECTED",
+      phase: "ops",
+      summary: "Conveyor jam fault. Motor current exceeded overload threshold for 3+ seconds.",
+      cause: "Blocked sensor stayed active while conveyor was running. Motor current rose to 46 deci-amps indicating stall or jam.",
+      steps: "1. Do NOT reset remotely before physical inspection\n2. De-energize drive at MCC\n3. Clear obstruction from belt\n4. Reset drive overload\n5. Jog at 20% speed and verify current below 8A"
+    },
+    301: {
+      label: "FAULT_E02 :: SEQ_TIMING_VIOLATION",
+      phase: "engineering",
+      summary: "Sequence step timer expired before expected transition.",
+      cause: "Timer T4:2 expired without Sensor_B going TRUE. Either timer preset is too tight, sensor is misaligned, or actuator is slow.",
+      steps: "1. Watch T4:2 accumulated vs preset in online monitor\n2. Manually jog actuator and observe Sensor_B\n3. If mechanism works, increase timer preset to 6.0s\n4. Add secondary alarm TON before hard fault"
+    },
+    401: {
+      label: "FAULT_E03 :: TANK_FILL_LOGIC_ERR",
+      phase: "engineering",
+      summary: "Tank level exceeded setpoint but fill valve still energized.",
+      cause: "GEQ comparison against Tank_HighHigh failing — analog input scaling may be returning raw counts instead of engineering units.",
+      steps: "1. Verify analog input scaling — LT-101 should be 0-100%\n2. Check Tank_Level tag — if showing 24576 instead of 98.0, scaling is wrong\n3. Correct SCL instruction or input module scaling block\n4. Add redundant discrete float switch as backup"
+    },
+    501: {
+      label: "FAULT_O06 :: HVAC_PUMP_FAILURE",
+      phase: "ops",
+      summary: "HVAC pump fault. Run feedback not confirming within 5-second proof-of-run window.",
+      cause: "Pump_Cmd is TRUE but Pump_FB is FALSE. Flow switch FS-201 not closing — motor starter auxiliary contact not confirming.",
+      steps: "1. Check motor starter overload at MCC\n2. Verify flow switch FS-201 differential pressure\n3. Check pump suction pressure at PI-101\n4. Inspect wiring at field junction box JB-12"
+    }
+  };
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let lastFaultCode = 0;
+
+  // ── Tag Monitor ───────────────────────────────────────────────────────────
+  function initTagGrid() {
+    const grid = document.getElementById('tagGrid');
+    grid.innerHTML = TAG_NAMES.map(name =>
+      `<div class="tag-row" id="tag-${name}">
+        <span class="tag-name">${name.replace(/_/g, '_\u200b')}</span>
+        <span class="tag-val" id="tagval-${name}">—</span>
+      </div>`
+    ).join('');
+  }
+
+  function updateTagMonitor(tags) {
+    if (!tags) return;
+    const now = new Date();
+    document.getElementById('tagTimestamp').textContent =
+      now.toTimeString().slice(0, 8);
+
+    TAG_NAMES.forEach(name => {
+      const val = tags[name];
+      if (val === undefined) return;
+      const row = document.getElementById(`tag-${name}`);
+      const span = document.getElementById(`tagval-${name}`);
+      if (!row || !span) return;
+
+      if (BOOL_TAGS.has(name)) {
+        const isTrue = val === true || val === 1;
+        span.textContent = isTrue ? 'TRUE' : 'FALSE';
+        span.className = `tag-val ${isTrue ? 'bool-true' : 'bool-false'}`;
+        const isFaultSignal = (name === 'System_Fault_Latch' || name === 'HVAC_Fault') && isTrue;
+        row.classList.toggle('fault-tag', isFaultSignal);
+      } else {
+        span.textContent = val;
+        const isFaultCode = name === 'Fault_Code' && val !== 0;
+        span.className = `tag-val${isFaultCode ? ' fault-val' : ''}`;
+        row.classList.toggle('fault-tag', isFaultCode);
+      }
+    });
+  }
+
+  // ── Metrics ───────────────────────────────────────────────────────────────
+  function updateMetrics(machine) {
+    if (!machine) return;
+
+    document.getElementById('metricState').textContent =
+      machine.state !== undefined ? machine.state : '—';
+    document.getElementById('metricStateLabel').textContent =
+      machine.state_label || '—';
+
+    const fc = machine.fault_code;
+    document.getElementById('metricFaultCode').textContent =
+      fc ? `E${fc}` : '—';
+    document.getElementById('metricFaultLabel').textContent =
+      machine.fault_label || (fc ? 'fault active' : 'no active fault');
+
+    document.getElementById('metricMode').textContent =
+      machine.mode_code !== undefined ? machine.mode_code : '—';
+    document.getElementById('metricModeSub').textContent = 'mode_code';
+
+    document.getElementById('footerSource').textContent =
+      machine.data_source || '—';
+    document.getElementById('footerScenario').textContent =
+      machine.scenario || '—';
+    document.getElementById('footerTime').textContent =
+      new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+  }
+
+  // ── Connection indicator ──────────────────────────────────────────────────
+  function setConnected(online) {
+    const dot = document.getElementById('connDot');
+    const label = document.getElementById('connLabel');
+    dot.className = `conn-dot ${online ? 'live' : 'offline'}`;
+    label.textContent = online ? 'LIVE' : 'OFFLINE';
+  }
+
+  // ── Polling loop ──────────────────────────────────────────────────────────
+  initTagGrid();
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${API}/api/state`);
+      const data = await res.json();
+      setConnected(true);
+      updateTagMonitor(data.tags);
+      updateMetrics(data.machine);
+
+      if (data.machine.fault_code !== lastFaultCode) {
+        lastFaultCode = data.machine.fault_code;
+        if (data.machine.fault_code === 0) {
+          clearFault();
+        } else {
+          handleFault(data.machine.fault_code, data.active_issue, data.tags);
+        }
+      }
+    } catch (e) {
+      setConnected(false);
+    }
+  }, 1000);
+</script>
 </body>
 </html>
