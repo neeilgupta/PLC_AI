@@ -318,23 +318,58 @@ class MockTagSource:
 
         if scenario == "idle":
             pass
-        elif scenario == "normal_run":
+        elif scenario == "traffic_phase_conflict":
             tags.update(
                 {
-                    "Mode_Code": 1,
-                    "Safety_OK": True,
-                    "Start_Command": True,
-                    "Conveyor_Running": True,
-                    "Motor_Current": 18,
+                    "Mode_Code": 2,
+                    "Safety_OK": False,
+                    "Sensor_Blocked": True,
+                    "System_Fault_Latch": True,
+                    "Fault_Code": 201,
                 }
             )
-        elif scenario == "motor_start_blocked":
+        elif scenario == "pump_station_failure":
+            tags.update(
+                {
+                    "Mode_Code": 4,
+                    "Pump_Running": False,
+                    "Tank_Level_Low": True,
+                    "Tank_Level_High": False,
+                    "System_Fault_Latch": True,
+                    "Fault_Code": 501,
+                }
+            )
+        elif scenario == "elevator_door_fault":
             tags.update(
                 {
                     "Mode_Code": 1,
                     "Start_Command": True,
+                    "Sensor_Blocked": True,
+                    "Safety_OK": False,
+                    "System_Fault_Latch": True,
+                    "Fault_Code": 101,
+                }
+            )
+        elif scenario == "tunnel_ventilation_fault":
+            tags.update(
+                {
+                    "Mode_Code": 2,
+                    "Sequence_Timeout": True,
+                    "System_Fault_Latch": True,
                     "Safety_OK": False,
                     "Conveyor_Running": False,
+                    "Fault_Code": 301,
+                }
+            )
+        elif scenario == "garage_door_fault":
+            tags.update(
+                {
+                    "Mode_Code": 0,
+                    "Start_Command": True,
+                    "Sensor_Blocked": True,
+                    "Safety_OK": False,
+                    "System_Fault_Latch": True,
+                    "Sequence_Timeout": False,
                     "Fault_Code": 101,
                 }
             )
@@ -342,114 +377,11 @@ class MockTagSource:
             tags.update(
                 {
                     "Mode_Code": 1,
-                    "Safety_OK": True,
-                    "Start_Command": True,
-                }
-            )
-            if elapsed < 2.0:
-                tags.update(
-                    {
-                        "Conveyor_Running": True,
-                        "Sensor_Blocked": False,
-                        "Motor_Current": 18,
-                    }
-                )
-            elif elapsed < 4.0:
-                tags.update(
-                    {
-                        "Conveyor_Running": True,
-                        "Sensor_Blocked": True,
-                        "Motor_Current": 46,
-                    }
-                )
-            else:
-                tags.update(
-                    {
-                        "Conveyor_Running": False,
-                        "Sensor_Blocked": True,
-                        "Motor_Current": 46,
-                        "System_Fault_Latch": True,
-                        "Fault_Code": 201,
-                    }
-                )
-        elif scenario == "fault_reset_demo":
-            tags.update(
-                {
-                    "Mode_Code": 1,
+                    "Conveyor_Running": False,
+                    "Sensor_Blocked": True,
+                    "Safety_OK": False,
+                    "System_Fault_Latch": True,
                     "Fault_Code": 201,
-                }
-            )
-            if elapsed < 4.0:
-                tags.update(
-                    {
-                        "System_Fault_Latch": True,
-                        "Sensor_Blocked": True,
-                        "Motor_Current": 42,
-                    }
-                )
-            elif elapsed < 7.0:
-                tags.update(
-                    {
-                        "System_Fault_Latch": True,
-                        "Sensor_Blocked": False,
-                        "Motor_Current": 0,
-                    }
-                )
-            else:
-                tags.update(
-                    {
-                        "Reset_Command": True,
-                        "System_Fault_Latch": False,
-                        "Fault_Code": 0,
-                        "Sensor_Blocked": False,
-                        "Motor_Current": 0,
-                    }
-                )
-        elif scenario == "sequence_timeout":
-            tags.update(
-                {
-                    "Mode_Code": 2,
-                    "Start_Command": True,
-                    "Safety_OK": True,
-                }
-            )
-            if elapsed < 3.0:
-                tags.update(
-                    {
-                        "Conveyor_Running": True,
-                        "Sequence_Timeout": False,
-                        "Fault_Code": 0,
-                    }
-                )
-            else:
-                tags.update(
-                    {
-                        "Conveyor_Running": False,
-                        "Sequence_Timeout": True,
-                        "System_Fault_Latch": True,
-                        "Fault_Code": 301,
-                    }
-                )
-        elif scenario == "tank_fill_verify":
-            tags.update(
-                {
-                    "Mode_Code": 3,
-                    "Tank_Level_Low": True,
-                    "Tank_Level_High": False,
-                    "Pump_Running": False,
-                    "System_Fault_Latch": True,
-                    "Fault_Code": 401,
-                }
-            )
-        elif scenario == "hvac_fault":
-            tags.update(
-                {
-                    "Mode_Code": 4,
-                    "Start_Command": True,
-                    "Pump_Running": False,
-                    "HVAC_Fault": True,
-                    "System_Fault_Latch": True,
-                    "Fault_Code": 501,
                 }
             )
 
