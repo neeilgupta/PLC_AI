@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PLC.AI — Industrial Fault Diagnostic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0e13;
+      --surface:   #111820;
+      --border:    #1e2d3d;
+      --accent:    #4fc3f7;
+      --green:     #4caf50;
+      --orange:    #ff9800;
+      --red:       #f44336;
+      --text:      #c9d6df;
+      --text-dim:  #5c7a8a;
+      --mono:      'Share Tech Mono', monospace;
+      --head:      'Barlow Condensed', sans-serif;
+      --body:      'Barlow', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      font-size: 14px;
+      line-height: 1.4;
+      overflow: hidden;
+    }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      grid-template-columns: 220px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Top Bar ─────────────────────────────────────── */
+    .topbar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      font-family: var(--head);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--accent);
+    }
+
+    .logo span {
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    .topbar-sub {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+
+    .status-pill {
+      font-family: var(--head);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 4px 14px;
+      border-radius: 2px;
+      border: 1px solid currentColor;
+      text-transform: uppercase;
+      transition: color 0.3s, border-color 0.3s, background 0.3s;
+    }
+
+    .status-pill.normal  { color: var(--green);  background: rgba(76,175,80,0.08); }
+    .status-pill.fault   { color: var(--red);    background: rgba(244,67,54,0.12); animation: blink 1s step-end infinite; }
+    .status-pill.warning { color: var(--orange); background: rgba(255,152,0,0.10); }
+
+    @keyframes blink { 50% { opacity: 0.4; } }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .conn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background 0.3s;
+    }
+
+    .conn-dot.live    { background: var(--green); }
+    .conn-dot.offline { background: var(--red); }
+
+    /* ── Left Panel ──────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 12px;
+      gap: 16px;
+    }
+
+    .panel-label {
+      font-family: var(--head);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .scenario-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .scenario-btn {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      padding: 7px 10px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      border-radius: 2px;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      line-height: 1.3;
+    }
+
+    .scenario-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(79,195,247,0.05);
+    }
+
+    .scenario-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(79,195,247,0.08);
+    }
+
+    .scenario-btn .btn-name {
+      display: block;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* ── Main Content ────────────────────────────────── */
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+      padding: 12px;
+      gap: 12px;
+    }
+
+    /* ── Metric Cards ────────────────────────────────── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 10px 14px;
+    }
+
+    .metric-card .metric-label {
+      font-family: var(--head);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .metric-card .metric-value {
+      font-family: var(--mono);
+      font-size: 20px;
+      color: var(--accent);
+      letter-spacing: 1px;
+    }
+
+    .metric-card .metric-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Middle Row: Tag Monitor + Diagnostic ────────── */
+    .middle-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--head);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .panel-body {
+      padding: 10px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* ── Tag Monitor ─────────────────────────────────── */
+    .tag-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+
+    .tag-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    .tag-row.fault-tag {
+      border-color: var(--red);
+      background: rgba(244,67,54,0.07);
+    }
+
+    .tag-name {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .tag-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text);
+      transition: color 0.3s;
+    }
+
+    .tag-val.bool-true  { color: var(--green); }
+    .tag-val.bool-false { color: var(--text-dim); }
+    .tag-val.fault-val  { color: var(--red); }
+
+    /* ── Diagnostic Panel ────────────────────────────── */
+    .fault-badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+    }
+
+    .fault-badge.active {
+      color: var(--red);
+      border-color: var(--red);
+      background: rgba(244,67,54,0.1);
+    }
+
+    .diag-content {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .diag-idle {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 30px 0;
+    }
+
+    .diag-idle .idle-icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 8px;
+      opacity: 0.3;
+    }
+
+    .diag-field {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .diag-field.visible { display: flex; }
+
+    .diag-field-label {
+      font-family: var(--head);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .diag-field-value {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .severity-pill {
+      display: inline-block;
+      font-family: var(--head);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      padding: 3px 10px;
+      border-radius: 2px;
+      text-transform: uppercase;
+    }
+
+    .severity-pill.critical   { color: var(--red);    background: rgba(244,67,54,0.15);  border: 1px solid var(--red); }
+    .severity-pill.high       { color: var(--red);    background: rgba(244,67,54,0.10);  border: 1px solid rgba(244,67,54,0.4); }
+    .severity-pill.medium     { color: var(--orange); background: rgba(255,152,0,0.12);  border: 1px solid var(--orange); }
+    .severity-pill.low        { color: var(--green);  background: rgba(76,175,80,0.10);  border: 1px solid var(--green); }
+
+    .checklist {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .checklist li {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      padding-left: 14px;
+      position: relative;
+    }
+
+    .checklist li::before {
+      content: '›';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    /* ── Bottom Bar ──────────────────────────────────── */
+    .bottombar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+
+    .bottombar span { letter-spacing: 0.5px; }
+    .bottombar .sep { color: var(--border); }
+
+    /* ── Scrollbar ───────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Top Bar ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">PLC<span>.</span>AI</div>
+      <div class="topbar-sub">INDUSTRIAL FAULT DIAGNOSTIC SYSTEM</div>
+    </div>
+    <div id="statusPill" class="status-pill normal">NORMAL</div>
+    <div class="topbar-right">
+      <div class="conn-indicator">
+        <div id="connDot" class="conn-dot"></div>
+        <span id="connLabel">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Left Panel ── -->
+  <aside class="sidebar">
+    <div class="panel-label">Mock Scenarios</div>
+    <div class="scenario-group" id="scenarioBtns">
+      <button class="scenario-btn" onclick="switchScenario('idle')">
+        IDLE<span class="btn-name">idle</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('traffic_phase_conflict')">
+        TRAFFIC CONFLICT<span class="btn-name">traffic_phase_conflict</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('pump_station_failure')">
+        PUMP FAILURE<span class="btn-name">pump_station_failure</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('elevator_door_fault')">
+        ELEVATOR DOOR<span class="btn-name">elevator_door_fault</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('tunnel_ventilation_fault')">
+        TUNNEL VENT<span class="btn-name">tunnel_ventilation_fault</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('garage_door_fault')">
+        GARAGE DOOR<span class="btn-name">garage_door_fault</span>
+      </button>
+      <button class="scenario-btn" onclick="switchScenario('conveyor_jam')">
+        CONVEYOR JAM<span class="btn-name">conveyor_jam</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main class="main">
+
+    <!-- Metric Cards -->
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-label">PLC Status</div>
+        <div class="metric-value" id="metricState">—</div>
+        <div class="metric-sub" id="metricStateLabel">waiting for data</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Fault Code</div>
+        <div class="metric-value" id="metricFaultCode">—</div>
+        <div class="metric-sub" id="metricFaultLabel">no active fault</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Mode</div>
+        <div class="metric-value" id="metricMode">—</div>
+        <div class="metric-sub" id="metricModeSub">mode_code</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Last Event</div>
+        <div class="metric-value" id="metricEventTime" style="font-size:13px">—</div>
+        <div class="metric-sub" id="metricEventLabel">no events</div>
+      </div>
+    </div>
+
+    <!-- Middle Row -->
+    <div class="middle-row">
+
+      <!-- Tag Monitor -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>Register Monitor</span>
+          <span id="tagTimestamp" style="font-family:var(--mono);font-size:10px">—</span>
+        </div>
+        <div class="panel-body">
+          <div class="tag-grid" id="tagGrid">
+            <!-- populated by updateTagMonitor() -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Diagnostic Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>AI Diagnostic</span>
+          <div id="faultBadge" class="fault-badge">FAULT: —</div>
+        </div>
+        <div class="panel-body">
+          <div class="diag-content" id="diagContent">
+            <div class="diag-idle" id="diagIdle">
+              <span class="idle-icon">◈</span>
+              NO ACTIVE FAULT<br/>
+              <span style="font-size:10px;margin-top:4px;display:block">trigger a scenario to begin</span>
+            </div>
+
+            <div class="diag-field" id="diagSeverityField">
+              <div class="diag-field-label">Severity</div>
+              <div><span id="diagSeverity" class="severity-pill">—</span></div>
+            </div>
+
+            <div class="diag-field" id="diagSummaryField">
+              <div class="diag-field-label">Issue Summary</div>
+              <div class="diag-field-value" id="diagSummary">—</div>
+            </div>
+
+            <div class="diag-field" id="diagCauseField">
+              <div class="diag-field-label">Likely Cause</div>
+              <div class="diag-field-value" id="diagCause">—</div>
+            </div>
+
+            <div class="diag-field" id="diagStepField">
+              <div class="diag-field-label">Troubleshooting Step</div>
+              <div class="diag-field-value" id="diagStep">—</div>
+            </div>
+
+            <div class="diag-field" id="diagChecksField">
+              <div class="diag-field-label">Recommended Checks</div>
+              <ul class="checklist" id="diagChecks"></ul>
+            </div>
+
+            <div class="diag-field" id="diagCvpField">
+              <div class="diag-field-label">Control vs Physical</div>
+              <div class="diag-field-value" id="diagCvp">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.middle-row -->
+
+    <!-- Bottom Bar -->
+    <div class="bottombar">
+      <span>PLC.AI v0.1</span>
+      <span class="sep">|</span>
+      <span>DATA_SOURCE: <span id="footerSource">—</span></span>
+      <span class="sep">|</span>
+      <span>SCENARIO: <span id="footerScenario">—</span></span>
+      <span class="sep">|</span>
+      <span id="footerTime">—</span>
+    </div>
+
+  </main><!-- /.main -->
+
+</div><!-- /.app -->
+
+</body>
+</html>
