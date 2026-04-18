@@ -12,7 +12,8 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+import google.generativeai as genai
 from pydantic import BaseModel
 from pymodbus.client import AsyncModbusTcpClient
 
