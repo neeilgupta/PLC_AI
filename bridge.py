@@ -458,6 +458,9 @@ class ClaudeDiagnosticsClient:
             ],
         )
         raw_content = response.content[0].text or "{}"
+        raw_content = raw_content.strip()
+        if raw_content.startswith("```"):
+            raw_content = raw_content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         payload = json.loads(raw_content)
         checks = payload.get("recommended_checks") or []
         if not isinstance(checks, list):
