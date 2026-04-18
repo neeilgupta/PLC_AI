@@ -724,6 +724,103 @@
     label.textContent = online ? 'LIVE' : 'OFFLINE';
   }
 
+  // ── Scenario switcher ────────────────────────────────────────────────────
+  async function switchScenario(name) {
+    try {
+      await fetch(`${API}/api/mock/scenario`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: name })
+      });
+      document.querySelectorAll('.scenario-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.querySelector('.btn-name').textContent === name);
+      });
+    } catch (e) { /* backend offline — button press noted visually only */ }
+  }
+
+  // ── Fault display helpers ─────────────────────────────────────────────────
+  function showDiagField(id) {
+    document.getElementById(id).classList.add('visible');
+  }
+
+  function hideDiagField(id) {
+    document.getElementById(id).classList.remove('visible');
+  }
+
+  function setDiagText(id, text) {
+    document.getElementById(id).textContent = text || '—';
+  }
+
+  // ── handleFault ───────────────────────────────────────────────────────────
+  function handleFault(faultCode, activeIssue, tags) {
+    // Update status pill
+    const pill = document.getElementById('statusPill');
+    pill.textContent = 'FAULT';
+    pill.className = 'status-pill fault';
+
+    // Update fault badge
+    const badge = document.getElementById('faultBadge');
+    badge.textContent = `FAULT: E${faultCode}`;
+    badge.className = 'fault-badge active';
+
+    // Hide idle message
+    document.getElementById('diagIdle').style.display = 'none';
+
+    // Use activeIssue from bridge.py if available, else fall back to CACHED_RESPONSES
+    const src = activeIssue || CACHED_RESPONSES[faultCode];
+    if (!src) return;
+
+    // Severity
+    const sev = (activeIssue && activeIssue.severity) || null;
+    if (sev) {
+      const sevEl = document.getElementById('diagSeverity');
+      sevEl.textContent = sev.toUpperCase();
+      sevEl.className = `severity-pill ${sev.toLowerCase()}`;
+      showDiagField('diagSeverityField');
+    }
+
+    // Summary
+    const summary = (activeIssue && activeIssue.issue_summary) || src.summary;
+    if (summary) { setDiagText('diagSummary', summary); showDiagField('diagSummaryField'); }
+
+    // Cause
+    const cause = (activeIssue && activeIssue.likely_cause) || src.cause;
+    if (cause) { setDiagText('diagCause', cause); showDiagField('diagCauseField'); }
+
+    // Troubleshooting step
+    const step = (activeIssue && activeIssue.troubleshooting_step) || src.steps;
+    if (step) { setDiagText('diagStep', step); showDiagField('diagStepField'); }
+
+    // Recommended checks (array from Claude or newline string from cache)
+    const checks = (activeIssue && activeIssue.recommended_checks);
+    if (checks && Array.isArray(checks) && checks.length) {
+      const ul = document.getElementById('diagChecks');
+      ul.innerHTML = checks.map(c => `<li>${c}</li>`).join('');
+      showDiagField('diagChecksField');
+    }
+
+    // Control vs Physical
+    const cvp = (activeIssue && activeIssue.control_vs_physical);
+    if (cvp) { setDiagText('diagCvp', cvp); showDiagField('diagCvpField'); }
+  }
+
+  // ── clearFault ────────────────────────────────────────────────────────────
+  function clearFault() {
+    const pill = document.getElementById('statusPill');
+    pill.textContent = 'NORMAL';
+    pill.className = 'status-pill normal';
+
+    const badge = document.getElementById('faultBadge');
+    badge.textContent = 'FAULT: —';
+    badge.className = 'fault-badge';
+
+    document.getElementById('diagIdle').style.display = '';
+    ['diagSeverityField','diagSummaryField','diagCauseField',
+     'diagStepField','diagChecksField','diagCvpField'].forEach(hideDiagField);
+
+    document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+  }
+
   // ── Polling loop ──────────────────────────────────────────────────────────
   initTagGrid();
 
