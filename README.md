@@ -1,4 +1,4 @@
-#Industrial Fault Diagnostic System
+# Industrial Fault Diagnostic System
 
 
 PLC.AI is a real-time fault diagnostic tool for industrial Programmable Logic Controllers. When a PLC faults on a factory floor, technicians waste hours manually reading fault codes and digging through documentation. PLC.AI detects the fault in real time, surfaces it on a dashboard, and uses Claude AI to stream back structured troubleshooting guidance in under 3 seconds.
