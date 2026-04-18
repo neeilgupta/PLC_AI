@@ -172,105 +172,105 @@ class RuleBasedDiagnostics:
         tags: dict[str, Any],
     ) -> DiagnosticReport:
         issue_id = issue_context["issue_id"]
-        if issue_id == "motor_start_blocked":
+        if issue_id == "tunnel_ventilation_fault":
             return DiagnosticReport(
                 issue_key=issue_context["issue_key"],
-                issue_summary="Motor start is blocked by the safety chain.",
-                likely_cause="A start command is present, but the PLC sees Safety_OK as false so the run request is being rejected by design.",
-                severity="MEDIUM",
-                troubleshooting_step="Check the E-stop string, guard switches, and safety relay feedback before attempting another start.",
-                recommended_checks=[
-                    "Verify Safety_OK goes to 1 in the PLC watch table.",
-                    "Confirm the emergency stop is released and any guard door is closed.",
-                    "Check whether the start command stays on after the safety circuit returns healthy.",
-                ],
-                escalation_note="Escalate to controls engineering if the safety circuit is healthy in the field but the PLC still reports Safety_OK = 0.",
-                classification="engineering_phase",
-                control_vs_physical="This looks primarily like intended logic behavior, not an AI-controlled action. The likely root cause is either an open safety device or incorrect safety wiring/configuration.",
-                generated_by="rule-fallback",
-            )
-        if issue_id == "sequence_timing_failure":
-            return DiagnosticReport(
-                issue_key=issue_context["issue_key"],
-                issue_summary="A sequence step timed out before the expected sensor or level condition arrived.",
-                likely_cause="The PLC timer expired while waiting for a process transition, which usually indicates an incorrect timer preset, wrong sensor mapping, or a simulated actuator that never achieved the expected state.",
-                severity="MEDIUM",
-                troubleshooting_step="Review the step transition condition, timer preset, and Factory I/O tag mapping for the expected sensor.",
-                recommended_checks=[
-                    "Confirm which sensor or level should have changed before the timeout.",
-                    "Watch Sequence_Timeout, Mode_Code, and the expected sensor tag together.",
-                    "Verify the timer preset matches the demo cycle time in Factory I/O.",
-                ],
-                escalation_note="Escalate to controls engineering if the physical sequence looks correct but the timer still expires.",
-                classification="engineering_phase",
-                control_vs_physical="This is usually a control-logic validation issue first. Physical causes are possible, but the timer and mapping should be checked before assuming hardware failure.",
-                generated_by="rule-fallback",
-            )
-        if issue_id == "tank_fill_verification":
-            return DiagnosticReport(
-                issue_key=issue_context["issue_key"],
-                issue_summary="Tank fill logic needs verification because the level state and pump state do not match the intended sequence.",
-                likely_cause="The pump or tank level transitions are not matching the expected fill sequence, which may be due to incorrect sensor polarity, timer configuration, or a simulated actuator mismatch.",
-                severity="LOW",
-                troubleshooting_step="Validate that low and high level inputs toggle in the right order while the pump command is active.",
-                recommended_checks=[
-                    "Low level should request filling; high level should stop the pump.",
-                    "Confirm the simulated tank in Factory I/O is mapped to the same addresses used in CODESYS.",
-                    "Check that Pump_Running changes when the PLC logic commands it.",
-                ],
-                escalation_note="Escalate if level switches are correct but the sequence still does not settle.",
-                classification="engineering_phase",
-                control_vs_physical="This is mostly a process verification case. The goal is to separate bad logic assumptions from a real pump/device issue.",
-                generated_by="rule-fallback",
-            )
-        if issue_id == "conveyor_jam_fault":
-            return DiagnosticReport(
-                issue_key=issue_context["issue_key"],
-                issue_summary="The conveyor appears jammed and the system fault latch is active.",
-                likely_cause="The blocked sensor stayed active while the conveyor was commanded to run, and motor current rose above the normal running range. That combination matches a jam or stalled product condition.",
+                issue_summary="Tunnel ventilation sequence timed out — fan run feedback never confirmed.",
+                likely_cause="CO2 exceeded safe threshold, fan PLC command was issued, but no run feedback arrived within the sequence window. Damper or fan actuator is likely stuck or de-energized.",
                 severity="HIGH",
-                troubleshooting_step="Stop the conveyor, clear the obstruction, inspect the sensor, then reset the fault once the blocked condition is gone.",
+                troubleshooting_step="Check fan breaker and local starter, verify damper position, then inspect the run feedback wiring from the fan panel back to the PLC.",
                 recommended_checks=[
-                    "Verify Sensor_Blocked returns to 0 after the jam is cleared.",
-                    "Compare Motor_Current against a known healthy running value.",
-                    "Check for trapped product, slipping belts, or a failed photo-eye.",
+                    "Confirm fan breaker is closed and local E-stop is released.",
+                    "Verify damper limit switch is showing open position.",
+                    "Check Sequence_Timeout and Safety_OK tags together for root cause.",
                 ],
-                escalation_note="Escalate if the conveyor path is clear but the sensor stays blocked or current remains high.",
-                classification="technician_operations",
-                control_vs_physical="The PLC is reacting correctly to abnormal runtime conditions. The likely root cause is physical: jammed product, mechanical drag, or a bad sensor.",
+                escalation_note="Escalate immediately — CO2 levels above threshold are a life-safety event. Do not allow personnel in the tunnel until ventilation is confirmed running.",
+                classification="engineering_phase",
+                control_vs_physical="The PLC issued the correct command. The failure is likely mechanical (stuck damper) or electrical (wiring, breaker, starter) on the fan side.",
                 generated_by="rule-fallback",
             )
-        if issue_id == "fault_reset_recovery":
+        if issue_id == "pump_station_failure":
             return DiagnosticReport(
                 issue_key=issue_context["issue_key"],
-                issue_summary="A latched fault is preventing restart until the fault condition is cleared and reset is performed.",
-                likely_cause="The PLC fault latch is still active, so restart requests are being blocked intentionally until the root cause is removed and Reset_Command is applied.",
-                severity="MEDIUM",
-                troubleshooting_step="Find the active cause first, then apply reset only after the fault inputs are healthy.",
+                issue_summary="Municipal water pump station fault — primary pump offline, backup auto-start failed, tank level dropping.",
+                likely_cause="Pump 1 tripped on overcurrent. Pump 2 auto-start permissives were not satisfied or the auto-transfer sequence did not execute. Tank level is falling toward critical low.",
+                severity="HIGH",
+                troubleshooting_step="Check Pump 1 overload at MCC, inspect Pump 2 auto-start permissives, then manually start Pump 2 if permissives are healthy.",
                 recommended_checks=[
-                    "Check Fault_Code for the original trip source.",
-                    "Confirm the abnormal input is no longer active.",
-                    "Press reset only after the system is back in a safe idle state.",
+                    "Inspect motor starter overload on Pump 1 at MCC panel.",
+                    "Verify Pump 2 suction pressure and discharge valve position.",
+                    "Confirm Tank_Level_Low is still active and Tank_Level_High has not been reached.",
                 ],
-                escalation_note="Escalate if reset clears momentarily and the fault immediately re-latches.",
+                escalation_note="Escalate to on-call maintenance immediately — sustained low tank level will impact service pressure for the distribution network.",
                 classification="technician_operations",
-                control_vs_physical="This is normal latched-fault behavior from the PLC. The underlying cause may be physical or logical depending on the active fault code.",
+                control_vs_physical="Physical device failure on Pump 1. PLC logic is correct; the auto-transfer may not have fired due to missing permissives on Pump 2.",
+                generated_by="rule-fallback",
+            )
+        if issue_id == "garage_door_fault":
+            return DiagnosticReport(
+                issue_key=issue_context["issue_key"],
+                issue_summary="Smart garage door safety lockout active — obstruction detected mid-cycle, door reversed and latched.",
+                likely_cause="Close command was received from the app. The obstruction sensor tripped during door travel, the door reversed twice per safety logic, and the PLC latched the safety fault to prevent further movement.",
+                severity="MEDIUM",
+                troubleshooting_step="Visually inspect the door opening for any obstruction, clear if present, then reset the fault from the wall panel or app before issuing another close command.",
+                recommended_checks=[
+                    "Confirm Sensor_Blocked returns to 0 after inspection.",
+                    "Verify the door track and photo-eye alignment are correct.",
+                    "Check Safety_OK — it must return to True before reset will clear the latch.",
+                ],
+                escalation_note="Escalate to service technician if Sensor_Blocked stays active with no visible obstruction — photo-eye misalignment or wiring fault is likely.",
+                classification="technician_operations",
+                control_vs_physical="The PLC safety logic triggered correctly. Root cause is physical: obstruction in door path or misaligned sensor.",
+                generated_by="rule-fallback",
+            )
+        if issue_id == "elevator_door_fault":
+            return DiagnosticReport(
+                issue_key=issue_context["issue_key"],
+                issue_summary="Elevator door fault — close commanded but door-open sensor never cleared, car held at floor.",
+                likely_cause="Door close command was issued and the motor energized, but the door-open sensor did not clear within the expected travel time. Safety chain tripped, holding the car at the current floor.",
+                severity="HIGH",
+                troubleshooting_step="Check for physical obstruction in the door path, verify the door-open sensor alignment, then reset the fault from the elevator controller before attempting another close.",
+                recommended_checks=[
+                    "Inspect door sill and car threshold for any trapped object.",
+                    "Confirm Sensor_Blocked clears when the door path is fully open and unobstructed.",
+                    "Check Safety_OK — must be True before reset is accepted.",
+                ],
+                escalation_note="Escalate to elevator maintenance if door path is clear but Sensor_Blocked stays active — sensor misalignment or cam failure likely.",
+                classification="technician_operations",
+                control_vs_physical="PLC safety chain triggered correctly. Root cause is physical: door obstruction, sensor misalignment, or mechanical door binding.",
+                generated_by="rule-fallback",
+            )
+        if issue_id == "traffic_phase_conflict":
+            return DiagnosticReport(
+                issue_key=issue_context["issue_key"],
+                issue_summary="Traffic signal conflict detected — simultaneous green phases triggered conflict monitor, all signals dropped to flashing red.",
+                likely_cause="The conflict monitor detected North-South and East-West green outputs active at the same time. This is a life-safety fault. The PLC latched all outputs to flashing red and halted normal phase sequencing.",
+                severity="HIGH",
+                troubleshooting_step="Do not attempt to resume normal operation remotely. Dispatch field technician to inspect output module wiring and conflict monitor relay. Keep signals in flashing red until cleared.",
+                recommended_checks=[
+                    "Verify conflict monitor relay has tripped and identify which phase outputs were simultaneously active.",
+                    "Inspect output module for shorted channels or wiring cross-connections.",
+                    "Check Safety_OK and System_Fault_Latch — both must be confirmed before any reset.",
+                ],
+                escalation_note="Escalate to traffic engineering and notify local PD for manual traffic control — do not clear the conflict latch without physical inspection.",
+                classification="engineering_phase",
+                control_vs_physical="This is a PLC output or wiring fault, not a physical road condition. The conflict monitor relay is working correctly by halting the sequence.",
                 generated_by="rule-fallback",
             )
         return DiagnosticReport(
             issue_key=issue_context["issue_key"],
-            issue_summary="HVAC or pump-related field diagnostics issue detected.",
-            likely_cause="The remote equipment fault input is active or expected pump behavior is missing, which points to a field-device issue, overload, or missing utility condition.",
-            severity="HIGH" if tags.get("HVAC_Fault") else "MEDIUM",
-            troubleshooting_step="Check local power, overloads, permissives, and mechanical status of the pump or HVAC equipment.",
+            issue_summary="Factory conveyor jam — belt stopped with sensor blocked, safety interlock tripped.",
+            likely_cause="The conveyor motor was running but the belt stopped moving. A downstream jam blocked the photo-eye, the safety interlock tripped, and the fault latched.",
+            severity="HIGH",
+            troubleshooting_step="De-energize the drive at the MCC before inspecting. Clear the obstruction from the belt, reset the drive overload, then jog at low speed to verify current is normal before resuming.",
             recommended_checks=[
-                "Inspect the field skid or HVAC package for its own alarm indicator.",
-                "Confirm Pump_Running feedback matches the command state.",
-                "Verify utility conditions such as breaker status, airflow, or pressure switches.",
+                "Confirm Sensor_Blocked clears after jam is removed.",
+                "Check Motor_Current after jog — should be below normal running threshold.",
+                "Verify Conveyor_Running feedback returns when commanded after reset.",
             ],
-            escalation_note="Escalate to maintenance if field power and mechanical checks are normal but the remote fault remains active.",
+            escalation_note="Escalate if belt path is clear but Sensor_Blocked stays active, or if current remains elevated after jam is cleared — possible photo-eye failure or mechanical drag.",
             classification="technician_operations",
-            control_vs_physical="This is most likely a real-world device issue being reported back into the control system, not a PLC execution fault.",
+            control_vs_physical="PLC reacted correctly. Root cause is physical: jammed product, mechanical drag, or a failed photo-eye sensor.",
             generated_by="rule-fallback",
         )
 
