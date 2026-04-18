@@ -87,11 +87,11 @@ class Settings:
     mock_scenario: str = os.getenv("MOCK_SCENARIO", "idle")
     fastapi_host: str = os.getenv("FASTAPI_HOST", "0.0.0.0")
     fastapi_port: int = int(os.getenv("FASTAPI_PORT", "8000"))
-    ai_model: str = os.getenv("AI_MODEL", "gpt-4o-mini")
-    ai_base_url: Optional[str] = os.getenv("AI_BASE_URL")
+    ai_model: str = os.getenv("AI_MODEL", "claude-sonnet-4-20250514")
     ai_cooldown_s: int = int(os.getenv("AI_COOLDOWN_S", "45"))
     ai_temperature: float = float(os.getenv("AI_TEMPERATURE", "0.1"))
-    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
+    anthropic_api_key: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
+    gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY")
     event_log_size: int = int(os.getenv("EVENT_LOG_SIZE", "250"))
     ai_history_size: int = int(os.getenv("AI_HISTORY_SIZE", "25"))
     dashboard_refresh_ms: int = int(os.getenv("DASHBOARD_REFRESH_MS", "2000"))
@@ -105,7 +105,7 @@ class Settings:
 
     @property
     def ai_enabled(self) -> bool:
-        return bool(self.openai_api_key)
+        return bool(self.anthropic_api_key)
 
 
 @dataclass
