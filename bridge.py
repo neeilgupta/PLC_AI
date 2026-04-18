@@ -692,53 +692,53 @@ class BridgeRuntime:
         return "IDLE"
 
     def evaluate_issue(self, tags: dict[str, Any]) -> Optional[dict[str, Any]]:
-        if tags["Start_Command"] and not tags["Safety_OK"] and not tags["Conveyor_Running"]:
+        if tags["Fault_Code"] == 301 or tags["Sequence_Timeout"]:
             return {
-                "issue_id": "motor_start_blocked",
-                "issue_key": f"motor_start_blocked:{int(tags['Safety_OK'])}:{int(tags['Start_Command'])}",
-                "severity": "MEDIUM",
+                "issue_id": "tunnel_ventilation_fault",
+                "issue_key": f"tunnel_ventilation_fault:{int(tags['Sequence_Timeout'])}:{tags['Fault_Code']}",
+                "severity": "HIGH",
                 "classification": "engineering_phase",
-                "reason": "Start command present with safety chain not healthy.",
+                "reason": "Ventilation sequence timed out; fan run feedback not confirmed.",
             }
-        if tags["Sequence_Timeout"]:
+        if tags["Fault_Code"] == 501 or (not tags["Pump_Running"] and tags["Tank_Level_Low"] and tags["System_Fault_Latch"]):
             return {
-                "issue_id": "sequence_timing_failure",
-                "issue_key": f"sequence_timing_failure:{tags['Mode_Code']}:{tags['Fault_Code']}",
-                "severity": "MEDIUM",
-                "classification": "engineering_phase",
-                "reason": "A sequence timer exceeded its expected transition window.",
-            }
-        if tags["System_Fault_Latch"] and tags["Sensor_Blocked"] and tags["Motor_Current"] >= 35:
-            return {
-                "issue_id": "conveyor_jam_fault",
-                "issue_key": f"conveyor_jam_fault:{tags['Fault_Code']}:{tags['Motor_Current']}",
+                "issue_id": "pump_station_failure",
+                "issue_key": f"pump_station_failure:{int(tags['Pump_Running'])}:{int(tags['Tank_Level_Low'])}",
                 "severity": "HIGH",
                 "classification": "technician_operations",
-                "reason": "Blocked sensor and elevated current indicate conveyor jam conditions.",
+                "reason": "Primary pump offline with low tank level — backup auto-start failed.",
             }
-        if tags["System_Fault_Latch"] and not tags["Reset_Command"]:
+        if tags["Fault_Code"] == 101 and tags["Mode_Code"] == 0 and tags["Start_Command"] and tags["Sensor_Blocked"] and not tags["Safety_OK"]:
             return {
-                "issue_id": "fault_reset_recovery",
-                "issue_key": f"fault_reset_recovery:{tags['Fault_Code']}",
+                "issue_id": "garage_door_fault",
+                "issue_key": f"garage_door_fault:{int(tags['Sensor_Blocked'])}:{int(tags['Safety_OK'])}",
                 "severity": "MEDIUM",
                 "classification": "technician_operations",
-                "reason": "Latched fault is active and reset has not been performed.",
+                "reason": "Obstruction sensor tripped mid-cycle, safety lockout active.",
             }
-        if tags["Mode_Code"] == 3 and tags["Tank_Level_Low"] and not tags["Pump_Running"] and not tags["Tank_Level_High"]:
+        if tags["Fault_Code"] == 101 and tags["Start_Command"] and tags["Sensor_Blocked"] and not tags["Safety_OK"]:
             return {
-                "issue_id": "tank_fill_verification",
-                "issue_key": f"tank_fill_verification:{int(tags['Tank_Level_Low'])}:{int(tags['Pump_Running'])}",
-                "severity": "LOW",
-                "classification": "engineering_phase",
-                "reason": "Tank fill demand exists but pump feedback does not match the expected state.",
-            }
-        if tags["HVAC_Fault"] or (tags["Mode_Code"] == 4 and not tags["Pump_Running"] and tags["System_Fault_Latch"]):
-            return {
-                "issue_id": "hvac_pump_failure",
-                "issue_key": f"hvac_pump_failure:{int(tags['HVAC_Fault'])}:{int(tags['Pump_Running'])}",
-                "severity": "HIGH" if tags["HVAC_Fault"] else "MEDIUM",
+                "issue_id": "elevator_door_fault",
+                "issue_key": f"elevator_door_fault:{int(tags['Sensor_Blocked'])}:{int(tags['Safety_OK'])}",
+                "severity": "HIGH",
                 "classification": "technician_operations",
-                "reason": "Remote equipment fault or missing pump behavior detected.",
+                "reason": "Door close commanded but sensor never cleared; safety chain tripped.",
+            }
+        if tags["Fault_Code"] == 201 and tags["Mode_Code"] == 2 and tags["System_Fault_Latch"] and not tags["Safety_OK"]:
+            return {
+                "issue_id": "traffic_phase_conflict",
+                "issue_key": f"traffic_phase_conflict:{int(tags['Safety_OK'])}:{int(tags['System_Fault_Latch'])}",
+                "severity": "HIGH",
+                "classification": "engineering_phase",
+                "reason": "Conflict monitor detected simultaneous green phases; all signals dropped to flashing red.",
+            }
+        if tags["Fault_Code"] == 201 and tags["System_Fault_Latch"] and tags["Sensor_Blocked"] and not tags["Safety_OK"]:
+            return {
+                "issue_id": "conveyor_jam",
+                "issue_key": f"conveyor_jam:{int(tags['Sensor_Blocked'])}:{int(tags['Conveyor_Running'])}",
+                "severity": "HIGH",
+                "classification": "technician_operations",
+                "reason": "Belt stopped with sensor blocked; safety interlock tripped.",
             }
         return None
 
