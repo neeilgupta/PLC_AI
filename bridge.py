@@ -470,15 +470,16 @@ class MockTagSource:
         return registers
 
 
-class OpenAIDiagnosticsClient:
+class ClaudeDiagnosticsClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.client: Optional[AsyncOpenAI] = None
+        self.client: Optional[AsyncAnthropic] = None
         if settings.ai_enabled:
-            self.client = AsyncOpenAI(
-                api_key=settings.openai_api_key,
-                base_url=settings.ai_base_url or None,
-            )
+            self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.gemini_model = None
+        if settings.gemini_api_key:
+            genai.configure(api_key=settings.gemini_api_key)
+            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
     async def create_diagnostic(
         self,
@@ -516,16 +517,16 @@ class OpenAIDiagnosticsClient:
             indent=2,
         )
 
-        response = await self.client.chat.completions.create(
+        response = await self.client.messages.create(
             model=self.settings.ai_model,
+            max_tokens=1024,
             temperature=self.settings.ai_temperature,
-            response_format={"type": "json_object"},
+            system=system_prompt,
             messages=[
-                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         )
-        raw_content = response.choices[0].message.content or "{}"
+        raw_content = response.content[0].text or "{}"
         payload = json.loads(raw_content)
         checks = payload.get("recommended_checks") or []
         if not isinstance(checks, list):
@@ -540,7 +541,7 @@ class OpenAIDiagnosticsClient:
             escalation_note=str(payload.get("escalation_note", "Escalate if the condition cannot be reproduced safely.")),
             classification=str(payload.get("classification", issue_context.get("classification", "technician_operations"))),
             control_vs_physical=str(payload.get("control_vs_physical", "Use the tags and event history to separate logic intent from device-level behavior.")),
-            generated_by="openai",
+            generated_by="claude",
         )
 
     async def answer_question(
