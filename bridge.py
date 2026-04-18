@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from anthropic import AsyncAnthropic
-import google.generativeai as genai
+from google import genai as google_genai
 from pydantic import BaseModel
 from pymodbus.client import AsyncModbusTcpClient
 
@@ -407,10 +407,9 @@ class ClaudeDiagnosticsClient:
         self.client: Optional[AsyncAnthropic] = None
         if settings.ai_enabled:
             self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.gemini_model = None
+        self.gemini_client = None
         if settings.gemini_api_key:
-            genai.configure(api_key=settings.gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+            self.gemini_client = google_genai.Client(api_key=settings.gemini_api_key)
 
     async def create_diagnostic(
         self,
@@ -483,7 +482,7 @@ class ClaudeDiagnosticsClient:
         question: str,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
-        if not self.gemini_model:
+        if not self.gemini_client:
             raise RuntimeError("Gemini client not configured")
 
         context = json.dumps({
@@ -501,7 +500,9 @@ Machine context: {context}
 Question: {question}"""
 
         response = await asyncio.to_thread(
-            self.gemini_model.generate_content, prompt
+            self.gemini_client.models.generate_content,
+            model="gemini-2.0-flash-lite",
+            contents=prompt,
         )
         return {
             "answer": response.text.strip(),

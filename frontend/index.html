@@ -189,7 +189,7 @@
     /* ── Main Content ────────────────────────────────── */
     .main {
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto 1fr 160px auto;
       overflow: hidden;
       padding: 12px;
       gap: 12px;
@@ -431,6 +431,71 @@
     .bottombar span { letter-spacing: 0.5px; }
     .bottombar .sep { color: var(--border); }
 
+    /* ── Chat Panel ─────────────────────────────────── */
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 10px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input:focus { border-color: var(--accent); }
+    .chat-input::placeholder { color: var(--text-dim); }
+
+    .chat-send-btn {
+      font-family: var(--head);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      padding: 6px 16px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .chat-send-btn:hover { background: rgba(79,195,247,0.1); }
+    .chat-send-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .chat-answer-area {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    .chat-answer-text {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .chat-answer-text.idle { color: var(--text-dim); font-family: var(--mono); font-size: 12px; }
+
+    .chat-source-label {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
     /* ── Scrollbar ───────────────────────────────────── */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -577,6 +642,24 @@
 
     </div><!-- /.middle-row -->
 
+    <!-- Technician Chat -->
+    <div class="panel" style="flex-direction:column;overflow:hidden;">
+      <div class="panel-header">
+        <span>Technician Chat</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">powered by Gemini</span>
+      </div>
+      <div class="chat-input-row">
+        <input id="chatInput" class="chat-input" type="text"
+          placeholder="Ask about this fault… (e.g. 'Why is the conveyor stopped?')"
+          onkeydown="if(event.key==='Enter') sendChat()" />
+        <button id="chatSendBtn" class="chat-send-btn" onclick="sendChat()">SEND</button>
+      </div>
+      <div class="chat-answer-area">
+        <div id="chatAnswer" class="chat-answer-text idle">Ask a question to get technician guidance from Gemini.</div>
+        <div id="chatSource" class="chat-source-label"></div>
+      </div>
+    </div>
+
     <!-- Bottom Bar -->
     <div class="bottombar">
       <span>PLC.AI v0.1</span>
@@ -690,13 +773,14 @@
   }
 
   // ── Metrics ───────────────────────────────────────────────────────────────
-  function updateMetrics(machine) {
+  function updateMetrics(data) {
+    const machine = data.machine;
     if (!machine) return;
 
     document.getElementById('metricState').textContent =
-      machine.state !== undefined ? machine.state : '—';
-    document.getElementById('metricStateLabel').textContent =
       machine.state_label || '—';
+    document.getElementById('metricStateLabel').textContent =
+      machine.mode_label || '—';
 
     const fc = machine.fault_code;
     document.getElementById('metricFaultCode').textContent =
@@ -708,10 +792,16 @@
       machine.mode_code !== undefined ? machine.mode_code : '—';
     document.getElementById('metricModeSub').textContent = 'mode_code';
 
+    const evt = data.recent_events?.[0];
+    document.getElementById('metricEventTime').textContent =
+      evt ? new Date(evt.timestamp).toTimeString().slice(0, 8) : '—';
+    document.getElementById('metricEventLabel').textContent =
+      evt?.message?.slice(0, 40) || 'no events';
+
     document.getElementById('footerSource').textContent =
-      machine.data_source || '—';
+      data.bridge?.data_source || '—';
     document.getElementById('footerScenario').textContent =
-      machine.scenario || '—';
+      data.mock?.active_scenario || '—';
     document.getElementById('footerTime').textContent =
       new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
   }
@@ -821,6 +911,37 @@
     document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
   }
 
+  // ── Technician Chat ───────────────────────────────────────────────────────
+  async function sendChat() {
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    const answerEl = document.getElementById('chatAnswer');
+    const sourceEl = document.getElementById('chatSource');
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = '';
+    btn.disabled = true;
+    answerEl.textContent = 'Asking Gemini…';
+    answerEl.className = 'chat-answer-text idle';
+    sourceEl.textContent = '';
+    try {
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+      });
+      const d = await res.json();
+      answerEl.textContent = d.answer || '—';
+      answerEl.className = 'chat-answer-text';
+      sourceEl.textContent = `source: ${d.source || 'unknown'}`;
+    } catch (e) {
+      answerEl.textContent = 'Backend unreachable — start bridge.py to use chat.';
+      answerEl.className = 'chat-answer-text idle';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // ── Polling loop ──────────────────────────────────────────────────────────
   initTagGrid();
 
@@ -830,7 +951,7 @@
       const data = await res.json();
       setConnected(true);
       updateTagMonitor(data.tags);
-      updateMetrics(data.machine);
+      updateMetrics(data);
 
       if (data.machine.fault_code !== lastFaultCode) {
         lastFaultCode = data.machine.fault_code;

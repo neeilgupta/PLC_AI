@@ -2,5 +2,5 @@ fastapi>=0.115,<1.0
 uvicorn[standard]>=0.34,<1.0
 pymodbus>=3.8,<4.0
 anthropic>=0.25,<1.0
-google-generativeai>=0.8,<1.0
+google-genai>=1.0
 python-dotenv>=1.0,<2.0
