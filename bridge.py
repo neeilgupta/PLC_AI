@@ -549,34 +549,29 @@ class ClaudeDiagnosticsClient:
         question: str,
         snapshot: dict[str, Any],
     ) -> dict[str, Any]:
-        if not self.client:
-            raise RuntimeError("AI client not configured")
+        if not self.gemini_model:
+            raise RuntimeError("Gemini client not configured")
 
-        system_prompt = (
-            "You are an industrial diagnostics assistant inside a machine troubleshooting UI. "
-            "You do not invent sensors, wiring, or machine design details. "
-            "Answer in plain language for a technician or controls engineer. "
-            "Use short paragraphs and practical checks."
+        context = json.dumps({
+            "machine_state": snapshot["machine"]["state_label"],
+            "fault_label": snapshot["machine"]["fault_label"],
+            "active_issue": snapshot.get("active_issue"),
+            "tags": snapshot["tags"],
+        })
+        prompt = f"""You are an industrial PLC diagnostic assistant.
+Answer this technician question using only the provided machine context.
+Be concise, practical, and direct. Under 150 words.
+
+Machine context: {context}
+
+Question: {question}"""
+
+        response = await asyncio.to_thread(
+            self.gemini_model.generate_content, prompt
         )
-        user_prompt = json.dumps(
-            {
-                "question": question,
-                "snapshot": snapshot,
-            },
-            indent=2,
-        )
-        response = await self.client.chat.completions.create(
-            model=self.settings.ai_model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        content = response.choices[0].message.content or "No response returned."
         return {
-            "answer": content.strip(),
-            "source": "openai",
+            "answer": response.text.strip(),
+            "source": "gemini",
             "timestamp": utc_now_iso(),
         }
 
@@ -585,7 +580,7 @@ class BridgeRuntime:
     def __init__(self, settings: Settings, ws_manager: WebSocketManager) -> None:
         self.settings = settings
         self.ws_manager = ws_manager
-        self.ai_client = OpenAIDiagnosticsClient(settings)
+        self.ai_client = ClaudeDiagnosticsClient(settings)
         self.rule_diagnostics = RuleBasedDiagnostics()
         self.modbus_client: Optional[AsyncModbusTcpClient] = None
         self.mock_source: Optional[MockTagSource] = None
